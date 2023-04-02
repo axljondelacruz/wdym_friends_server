@@ -1,80 +1,46 @@
+const shortId = require('shortid');
+
 const roomHandler = (io, socket, rooms) => {
   const create = (payload, callback) => {
-    if (payload.type === 'stranger') {
-      const index = rooms.findIndex(
-        (room) => room.vacant === true && room.private === false
-      );
-      if (index >= 0) {
-        const room = rooms[index];
-        room.players[socket.id] = {
+    console.log('creating room');
+    const room = {
+      roomId: shortId.generate(),
+      players: [
+        {
+          id: socket.id,
           option: null,
           optionLock: false,
           score: 0,
-        };
-        room.vacant = false;
-        socket.join(room.roomId);
-        io.to(room.roomId).emit('room:get', room);
-        callback(null, room.roomId);
-      } else {
-        const room = {
-          roomId: shortId.generate(),
-          players: {
-            [socket.id]: {
-              option: null,
-              optionLock: false,
-              score: 0,
-            },
-          },
-          vacant: true,
-          private: false,
-          type: payload.type,
-        };
-        rooms.push(room);
-        socket.join(room.roomId);
-        io.to(room.roomId).emit('room:get', room);
-        callback(null, room.roomId);
-      }
-    } else {
-      const room = {
-        roomId: shortId.generate(),
-        players: {
-          [socket.id]: {
-            option: null,
-            optionLock: false,
-            score: 0,
-          },
         },
-        vacant: true,
-        private: true,
-        type: payload.type,
-      };
-      rooms.push(room);
-      socket.join(room.roomId);
-      io.to(room.roomId).emit('room:get', room);
-      callback(null, room.roomId);
-    }
+      ],
+      vacant: true,
+      private: true,
+      name: payload.name,
+    };
+    rooms.push(room);
+    socket.join(room.roomId);
+    io.to(room.roomId).emit('room:get', room);
+    socket.emit('room:created', rooms);
+    callback(null, room.roomId);
   };
 
   const join = (payload, callback) => {
+    console.log('joining room');
     const index = rooms.findIndex((room) => room.roomId === payload.roomId);
     if (index >= 0) {
       const room = rooms[index];
-      if (room.players[socket.id]) return callback(null);
+      if (room.players.find((p) => p.id === socket.id)) return callback(null);
 
-      if (room.vacant && room.private) {
-        room.players[socket.id] = {
-          option: null,
-          optionLock: false,
-          score: 0,
-        };
-        room.vacant = false;
-        rooms.push(room);
-        socket.join(room.roomId);
-        io.to(room.roomId).emit('room:get', room);
-        callback(null, room);
-      } else {
-        callback({ error: true });
-      }
+      room.players.push({
+        id: socket.id,
+        option: null,
+        optionLock: false,
+        score: 0,
+      });
+      rooms.push(room);
+      socket.join(room.roomId);
+      io.to(room.roomId).emit('room:get', room);
+      callback(null, room);
     } else {
       callback({ error: true });
     }
