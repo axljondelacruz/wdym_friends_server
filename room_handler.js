@@ -1,53 +1,69 @@
-const shortId = require('shortid');
+const shortId = require('shortid')
 
 const roomHandler = (io, socket, rooms) => {
   const create = (payload, callback) => {
-    console.log('creating room');
     const room = {
       roomId: shortId.generate(),
       players: [
         {
           id: socket.id,
-          option: null,
-          optionLock: false,
-          score: 0,
         },
       ],
-      vacant: true,
-      private: true,
       name: payload.name,
-    };
-    rooms.push(room);
-    socket.join(room.roomId);
-    io.to(room.roomId).emit('room:get', room);
-    socket.emit('room:created', rooms);
-    callback(null, room.roomId);
-  };
+    }
+    rooms.push(room)
+    socket.join(room.roomId)
+    io.to(room.roomId).emit('room:get', room)
+    io.emit('rooms:update', rooms)
+    callback(null, room.roomId)
+  }
 
   const join = (payload, callback) => {
-    console.log('joining room');
-    const index = rooms.findIndex((room) => room.roomId === payload.roomId);
-    if (index >= 0) {
-      const room = rooms[index];
-      if (room.players.find((p) => p.id === socket.id)) return callback(null);
+    const roomIndex = rooms.findIndex((room) => room.roomId === payload.roomId)
+    if (roomIndex >= 0) {
+      const room = rooms[roomIndex]
+      if (room.players.find((p) => p.id === socket.id)) return callback(null)
 
       room.players.push({
         id: socket.id,
-        option: null,
-        optionLock: false,
-        score: 0,
-      });
-      rooms.push(room);
-      socket.join(room.roomId);
-      io.to(room.roomId).emit('room:get', room);
-      callback(null, room);
+      })
+      // rooms.push(room)
+      socket.join(room.roomId)
+      io.to(room.roomId).emit('room:get', room)
+      callback(null, room)
     } else {
-      callback({ error: true });
+      callback({ error: true })
     }
-  };
+  }
 
-  socket.on('room:create', create);
-  socket.on('room:join', join);
-};
+  const leave = (payload, callback) => {
+    const roomIndex = rooms.findIndex((room) => room.roomId === payload.roomId)
+    if (roomIndex >= 0) {
+      const room = rooms[roomIndex]
+      const playerIndex = room.players.findIndex(
+        (player) => player.id === socket.id
+      )
+      if (playerIndex >= 0) {
+        room.players.splice(playerIndex, 1)
+        socket.leave(room.roomId)
+        socket.to(room.roomId).emit('room:update', room)
+        if (room.players.length === 0) {
+          rooms.splice(roomIndex, 1)
+          io.emit('rooms:update', rooms)
+        }
 
-module.exports = roomHandler;
+        callback(null, payload)
+      } else {
+        callback({ error: true })
+      }
+    } else {
+      callback({ error: true })
+    }
+  }
+
+  socket.on('room:create', create)
+  socket.on('room:join', join)
+  socket.on('room:leave', leave)
+}
+
+module.exports = roomHandler
